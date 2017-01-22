@@ -9,7 +9,8 @@
         Composites = Matter.Composites,
         Constraint = Matter.Constraint,
         Common = Matter.Common,
-        MouseConstraint = Matter.MouseConstraint;
+        MouseConstraint = Matter.MouseConstraint,
+        Events = Matter.Events;
 
     var Demo = {};
 
@@ -45,13 +46,11 @@
 
         window.addEventListener('deviceorientation', function(event) {
             _deviceOrientationEvent = event;
-            // Demo.updateGravity(event);
         }, true);
 
         // window.addEventListener('touchstart', Demo.fullscreen);
 
         window.addEventListener('orientationchange', function() {
-            Demo.updateGravity(_deviceOrientationEvent);
             Demo.updateScene();
             // Demo.fullscreen();
         }, false);
@@ -59,37 +58,9 @@
 
     window.addEventListener('load', Demo.init);
 
-    Demo.mixed = function() {
-        var _world = _engine.world;
-        
-        Demo.reset();
-
-        World.add(_world, MouseConstraint.create(_engine));
-        
-        var stack = Composites.stack(20, 20, 10, 5, 0, 0, function(x, y, column, row) {
-            switch (Math.round(Common.random(0, 1))) {
-                
-            case 0:
-                if (Common.random() < 0.8) {
-                    return Bodies.rectangle(x, y, Common.random(20, 40), Common.random(20, 40), { friction: 0.01, restitution: 0.4 });
-                } else {
-                    return Bodies.rectangle(x, y, Common.random(80, 120), Common.random(20, 30), { friction: 0.01, restitution: 0.4 });
-                }
-                break;
-            case 1:
-                return Bodies.polygon(x, y, Math.round(Common.random(4, 6)), Common.random(20, 40), { friction: 0.01, restitution: 0.4 });
-            
-            }
-        });
-        
-        World.add(_world, stack);
-    };
-
-    Demo.chains = function() {
+    Demo.chain = function(centerX) {
         var engine = _engine,
             world = engine.world;
-
-        World.add(world, MouseConstraint.create(_engine));
 
         group = Body.nextGroup(true);
 
@@ -99,7 +70,7 @@
         var linkDistance = 2;
         var ropeStiffness = 0.9;
         var mountTop = {x: 160, y: -90};
-        var mountBottom = {x: 160, y: mountTop.y+linkNo*linkHeight+linkNo*linkDistance+linkDistance};
+        var mountBottom = {x: centerX, y: mountTop.y+linkNo*linkHeight+linkNo*linkDistance+linkDistance};
 
         var ropeA = Composites.stack(mountTop.x, mountTop.y+linkDistance+linkHeight/2, 1, linkNo, 0, linkDistance, function (x, y) {
             return Bodies.rectangle(x-linkWidth/2, y-linkHeight/2, linkWidth, linkHeight, {
@@ -130,27 +101,90 @@
         //    Matter.Body.setPosition(ropeA.bodies[i], {x: i*8.77, y: 285});
         // }
 
-        group = Body.nextGroup(true);
+        var linkForTouch = ropeA.bodies[100];
 
-        var ropeB = Composites.stack(160-20, 20, 1, 5, 0, 20, function(x, y) {
-            return Bodies.circle(x, y, 20, {
-                // collisionFilter: { group: group },
-                //angle: Math.PI/2
-            });
+        var mouse = MouseConstraint.create(_engine);
+        //World.add(world, mouse);
+
+        Events.on(mouse, "mousedown", function(event) {
+            if (event.mouse.position.x > linkForTouch.position.x - 25 && event.mouse.position.x < linkForTouch.position.x + 25) {
+                record = new Record();
+                record.add(event.mouse.position);
+            }
+        });
+        Events.on(mouse, "mouseup", function(event) {
+            if (record) {
+                record.stopRecording();
+            }
+            //console.log(event)
+        });
+        Events.on(mouse, "mousemove", function(event) {
+            //console.log(event)
+            if (record && record.isRecording) {
+                record.add(event.mouse.position);
+            }
         });
 
-        // Composites.chain(ropeB, 0.5, 0, -0.5, 0, { stiffness: 0.8, length: 20 });
-        // Composite.add(ropeB, Constraint.create({
-        //     bodyB: ropeB.bodies[0],
-        //     pointB: { x: -20, y: 0 },
-        //     pointA: { x: 160, y: 0 },
-        //     length: 20,
-        //     stiffness: 0.8
-        // }));
+        Events.on(engine, "afterUpdate", function(event) {
 
-        // World.add(world, ropeB);
+            if (record) {
+                for (i in record.points) {
+                    if (record.isRecording) {
+                    } else {
+                        record.points[i].y -= (linkWidth + linkDistance) * 2;
+                    }
+                }
+                if (!record.isRecording/* && !record.isUpdating*/) {
+                    record.isUpdating = true;
+                    for (i in record.points) {
+                        console.log(+record.waveOffset + +i);
+                        Body.setPosition(ropeA.bodies[+record.waveOffset + +i], record.points[record.points.length - 1 - i]);
+                    }
+                    record.waveOffset -= 2;
+                    record.isUpdating = false;
+                    if (record.waveOffset <= 0) {
+                        record = null;
+                    }
+                }
+            }
+        });
 
+        var record;
+
+        var Record = function () {
+            this.isRecording = true;
+            this.isUpdating = false;
+            this.waveOffset = null;
+            this.lastPoint = null;
+            this.points = [];
+            this.add = function(point) {
+                if (this.lastPoint && distanceFast(point, this.lastPoint) < 20) {
+                    return false;
+                }
+                for (i in this.points) {
+                    //record.points[i].y -= (linkWidth + linkDistance) * 2;
+                }
+                this.lastPoint = { x: point.x, y: point.y };
+                this.points.push(this.lastPoint);
+                if (this.points.length >= 20) {
+                    this.stopRecording();
+                    return true;
+                }
+                return false;
+            };
+            this.stopRecording = function () {
+                this.isRecording = false;
+                record.waveOffset = 90;
+            }
+            function distanceFast(point1, point2) {
+                return Math.max(Math.abs(point1.x - point2.x), Math.abs(point1.y - point2.y));
+            };
+        };
     };
+
+
+
+
 
     Demo.updateScene = function() {
         if (!_engine)
@@ -169,31 +203,10 @@
         canvas.width = renderOptions.width = _sceneWidth;
         canvas.height = renderOptions.height = _sceneHeight;
 
-        Demo[_sceneName]();
+        Demo.chain(160);
     };
     
-    // Demo.updateGravity = function(event) {
-    //     if (!_engine)
-    //         return;
-    //
-    //     var orientation = window.orientation,
-    //         gravity = _engine.world.gravity;
-	//
-    //     if (orientation === 0) {
-    //         gravity.x = Common.clamp(event.gamma, -90, 90) / 90;
-    //         gravity.y = Common.clamp(event.beta, -90, 90) / 90;
-    //     } else if (orientation === 180) {
-    //         gravity.x = Common.clamp(event.gamma, -90, 90) / 90;
-    //         gravity.y = Common.clamp(-event.beta, -90, 90) / 90;
-    //     } else if (orientation === 90) {
-    //         gravity.x = Common.clamp(event.beta, -90, 90) / 90;
-    //         gravity.y = Common.clamp(-event.gamma, -90, 90) / 90;
-    //     } else if (orientation === -90) {
-    //         gravity.x = Common.clamp(-event.beta, -90, 90) / 90;
-    //         gravity.y = Common.clamp(event.gamma, -90, 90) / 90;
-    //     }
-    // };
-    
+
     Demo.fullscreen = function(){
         var _fullscreenElement = _engine.render.canvas;
         
@@ -206,21 +219,6 @@
                 _fullscreenElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
             }
         }
-    };
-    
-    Demo.reset = function() {
-        var _world = _engine.world;
-
-        Common._seed = 2;
-        
-        World.clear(_world);
-        Engine.clear(_engine);
-        
-        var offset = 5;
-        World.addBody(_world, Bodies.rectangle(_sceneWidth * 0.5, -offset, _sceneWidth + 0.5, 50.5, { isStatic: true }));
-        World.addBody(_world, Bodies.rectangle(_sceneWidth * 0.5, _sceneHeight + offset, _sceneWidth + 0.5, 50.5, { isStatic: true }));
-        World.addBody(_world, Bodies.rectangle(_sceneWidth + offset, _sceneHeight * 0.5, 50.5, _sceneHeight + 0.5, { isStatic: true }));
-        World.addBody(_world, Bodies.rectangle(-offset, _sceneHeight * 0.5, 50.5, _sceneHeight + 0.5, { isStatic: true }));
     };
 
 })();
