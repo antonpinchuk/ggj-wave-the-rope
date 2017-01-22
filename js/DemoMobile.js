@@ -35,7 +35,7 @@
 
         _engine.world.gravity.y = 0;
 
-        // Demo.fullscreen();
+        Demo.fullscreen();
 
         setTimeout(function() {
             var runner = Engine.run(_engine);
@@ -52,7 +52,7 @@
 
         window.addEventListener('orientationchange', function() {
             Demo.updateScene();
-            // Demo.fullscreen();
+            Demo.fullscreen();
         }, false);
     };
 
@@ -190,7 +190,7 @@
             this.stopRecording = function () {
                 this.isRecording = false;
                 record.waveOffset = 90;
-            }
+            };
             function distanceFast(point1, point2) {
                 return Math.max(Math.abs(point1.x - point2.x), Math.abs(point1.y - point2.y));
             };
@@ -211,6 +211,15 @@
                 if (++tickCount == 200) {
                     Matter.Composite.remove(world, this.body);
                     box = null;
+                }
+                if (record) {
+                    //var bounds = record.getBounds();
+                    if (this.body.position.y >= record.points[0].y) {
+                        this.body.force.x = Common.random(-0.05, 0.05);
+                        this.body.force.y = -0.01;
+                        //Matter.Composite.remove(world, this.body);
+                        //box = null;
+                    }
                 }
                 //Body.setPosition(body, body.position.x, body.position.y+1);
             };
