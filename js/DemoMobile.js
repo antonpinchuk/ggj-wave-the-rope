@@ -147,7 +147,7 @@
                 if (!record.isRecording/* && !record.isUpdating*/) {
                     record.isUpdating = true;
                     for (i in record.points) {
-                        console.log(+record.waveOffset + +i);
+                        //console.log(+record.waveOffset + +i);
                         Body.setPosition(ropeA.bodies[+record.waveOffset + +i], record.points[record.points.length - 1 - i]);
                     }
                     record.waveOffset -= 2;
@@ -191,6 +191,24 @@
                 this.isRecording = false;
                 record.waveOffset = 90;
             };
+            this.getBounds = function () {
+                var minX=1000, minY=1000, maxX=-1000, maxY=-1000;
+                for (i in this.points) {
+                    minX = Math.min(minX, this.points[i].x);
+                    minY = Math.min(minY, this.points[i].y);
+                    maxX = Math.max(maxX, this.points[i].x);
+                    maxY = Math.max(maxY, this.points[i].y);
+                }
+                if (maxX >= minX && maxY >= minY) {
+                    return {
+                        x: minX + (maxX - minX)/2,
+                        y: minY + (maxY - minY)/2,
+                        width: maxX - minX,
+                        height: maxY - minY
+                    };
+                }
+                return null;
+            };
             function distanceFast(point1, point2) {
                 return Math.max(Math.abs(point1.x - point2.x), Math.abs(point1.y - point2.y));
             };
@@ -212,9 +230,10 @@
                     Matter.Composite.remove(world, this.body);
                     box = null;
                 }
-                if (record) {
-                    //var bounds = record.getBounds();
-                    if (this.body.position.y >= record.points[0].y) {
+                var recPos;
+                if (record && (recPos = record.getBounds())) {
+                    console.log(recPos);
+                    if (this.body.position.y >= recPos.y && validateShape(recPos.width, recPos.height)) {
                         this.body.force.x = Common.random(-0.05, 0.05);
                         this.body.force.y = -0.01;
                         //Matter.Composite.remove(world, this.body);
@@ -223,6 +242,20 @@
                 }
                 //Body.setPosition(body, body.position.x, body.position.y+1);
             };
+
+            function validateShape(width, height) {
+                var coof = 0.3;
+                var differ = Math.abs(width-height);
+                var max = Math.max(width, height);
+                var min = Math.min(width, height);
+                if (this.type == 'rectangleVertical') {
+                    return width > height * 2;
+                } else if (this.type == 'rectangleHorizontal') {
+                    return height > width * 2;
+                } else {
+                    return max < 80 && max > 20;
+                }
+            }
 
             function create(type) {
                 var body;
